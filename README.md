@@ -5,23 +5,66 @@ A microservices-based platform for orchestrating GenAI inference requests using 
 ## Architecture Overview
 
 ```
-┌─────────────┐     ┌──────────────┐     ┌──────────────────┐     ┌─────────────────────┐
-│ API Gateway │────▶│ Orchestrator │────▶│ Inference Worker │────▶│ Response Processor  │
-└─────────────┘     └──────────────┘     └──────────────────┘     └─────────────────────┘
-       │                  │                        │                         │
-       │                  └────────────────────────┼─────────────────────────┘
-       │                                           │
-       ▼                                           ▼
-┌──────────────┐                             ┌──────────┐
-│  PostgreSQL  │                             │  Kafka   │
-│   (Storage)  │                             │ (Broker) │
-└──────────────┘                             └──────────┘
-       │
-       ▼
-┌──────────────┐
-│    Redis     │
-│   (Cache)    │
-└──────────────┘
+                         React.js
+                            │
+                            ▼
+                 Spring Cloud Gateway
+                 Auth • Rate Limit
+                            │
+                            ▼
+                     Orchestrator
+              Validation • Idempotency
+                            │
+                            ▼
+                          Kafka
+                            │
+             ┌──────────────┼──────────────┐
+             ▼              ▼              ▼
+          Worker 1       Worker 2       Worker N
+             └──────────────┼──────────────┘
+                            ▼
+                   Intelligent Router
+                  Cost • Quality • Latency
+                       /     |      \
+                      ▼      ▼       ▼
+                   Model A Model B Model C
+                      \      |       /
+                       └──────┼─────┘
+                              ▼
+                         LLM Provider
+                              │
+                    ┌─────────┴─────────┐
+                    │ Retry             │
+                    │ Fallback          │
+                    │ Circuit Breaker   │
+                    │ DLQ               │
+                    └─────────┬─────────┘
+                              ▼
+                     Response Processor
+                              │
+              ┌───────────────┼───────────────┐
+              ▼               ▼               ▼
+         PostgreSQL         Redis        Azure Blob
+                             
+                 ─── Observability ───
+                              │
+                     OpenTelemetry
+                              │
+          ┌───────────────────┼──────────────────┐
+          ▼                   ▼                  ▼
+       Jaeger             Prometheus         OpenSearch
+       Traces              Metrics               Logs
+          └───────────────────┼──────────────────┘
+                              ▼
+                           Grafana
+
+                 ─── Cloud Infrastructure ───
+                              │
+                         Azure AKS
+                              │
+                    ┌─────────┴─────────┐
+                    ▼                   ▼
+                   ACR             Key Vault
 ```
 
 ## Services

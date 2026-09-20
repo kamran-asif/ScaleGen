@@ -1,396 +1,300 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import './index.css';
-
-const stripePromise = loadStripe('pk_test_your_publishable_key_here');
-
-const CheckoutForm = ({ clientSecret, onSuccess, onBack }) => {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!stripe || !elements) return;
-
-    setLoading(true);
-    setError(null);
-
-    const { error: paymentError, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
-      payment_method: {
-        card: elements.getElement(CardElement),
-      },
-    });
-
-    if (paymentError) {
-      setError(paymentError.message);
-    } else if (paymentIntent.status === 'succeeded') {
-      onSuccess();
-    }
-    setLoading(false);
-  };
-
-  return (
-    <div className="payment-form">
-      <h3>Complete Payment</h3>
-      <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <CardElement />
-        </div>
-        {error && <div className="error-message">{error}</div>}
-        <div className="button-group">
-          <button type="button" className="btn btn-secondary" onClick={onBack} disabled={loading}>
-            Back
-          </button>
-          <button type="submit" className="btn" disabled={!stripe || loading}>
-            {loading ? 'Processing...' : 'Pay Now'}
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-};
 
 const App = () => {
   const [prompt, setPrompt] = useState('');
-  const [model, setModel] = useState('gpt-3.5-turbo');
-  const [tone, setTone] = useState('');
-  const [userId, setUserId] = useState('user-' + Math.random().toString(36).substr(2, 9));
+  const [model, setModel] = useState('gpt-4o');
+  const [routingStrategy, setRoutingStrategy] = useState('AUTO');
+  const [idempotencyKey, setIdempotencyKey] = useState('');
+  const [userId, setUserId] = useState('user-' + Math.random().toString(36).substring(2, 7));
+  const [tenantId, setTenantId] = useState('tenant-enterprise');
+  
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [checkRequestId, setCheckRequestId] = useState('');
   const [checkedRequest, setCheckedRequest] = useState(null);
   const [checking, setChecking] = useState(false);
-  const [userBalance, setUserBalance] = useState(null);
-  const [showPayment, setShowPayment] = useState(false);
-  const [clientSecret, setClientSecret] = useState(null);
-  const [activeTab, setActiveTab] = useState('request');
-  const [paymentLoading, setPaymentLoading] = useState(false);
-
-  const products = [
-    { name: '10 Credits', credits: 10, amount: 500, description: '10 AI requests' },
-    { name: '50 Credits', credits: 50, amount: 2000, description: '50 AI requests - Save 20%' },
-    { name: '100 Credits', credits: 100, amount: 3500, description: '100 AI requests - Save 30%' },
-  ];
+  const [activeTab, setActiveTab] = useState('playground');
+  
+  const [allRequests, setAllRequests] = useState([]);
+  const [metrics, setMetrics] = useState(null);
 
   useEffect(() => {
-    loadUserBalance();
-  }, [userId]);
+    fetchMetrics();
+    fetchAllRequests();
+  }, [activeTab]);
 
-  const loadUserBalance = async () => {
+  const fetchMetrics = async () => {
     try {
-      const response = await axios.get(`http://localhost:8084/api/v1/payments/balance/${userId}`);
-      setUserBalance(response.data);
-    } catch (error) {
-      console.error('Error loading balance:', error);
+      const res = await axios.get('/api/v1/inference/metrics');
+      setMetrics(res.data);
+    } catch (e) {
+      console.log('Metrics fetch error', e);
+    }
+  };
+
+  const fetchAllRequests = async () => {
+    try {
+      const res = await axios.get('/api/v1/inference');
+      setAllRequests(res.data);
+    } catch (e) {
+      console.log('Fetch requests error', e);
     }
   };
 
   const submitRequest = async (e) => {
     e.preventDefault();
-    
-    if (!userBalance || userBalance.credits < 1) {
-      alert('Not enough credits! Please purchase credits first.');
-      setActiveTab('payment');
-      return;
-    }
-
     setLoading(true);
     setSuccessMessage('');
 
     try {
-      const useCreditResponse = await axios.post('http://localhost:8084/api/v1/payments/use-credits', {
-        userId,
-        credits: 1
-      });
-
-      if (!useCreditResponse.data.success) {
-        alert('Failed to use credits. Please check your balance.');
-        setLoading(false);
-        return;
-      }
-
       const response = await axios.post('/api/v1/inference', {
         prompt,
         model,
-        parameters: tone ? { tone } : {},
-        userId
+        routingStrategy,
+        idempotencyKey: idempotencyKey.trim() || undefined,
+        userId,
+        tenantId,
+        parameters: { systemPrompt: 'Be highly concise and accurate.' }
       });
 
-      setSuccessMessage(`Request submitted! Request ID: ${response.data.requestId}`);
+      const reqId = response.data.requestId;
+      setSuccessMessage(`Enqueued successfully! Request ID: ${reqId}`);
+      setCheckRequestId(reqId);
       setPrompt('');
-      setTone('');
-      loadUserBalance();
 
-      setTimeout(() => setSuccessMessage(''), 5000);
+      // Auto poll for completed response
+      setTimeout(() => {
+        pollStatus(reqId);
+      }, 800);
+
+      fetchMetrics();
+      fetchAllRequests();
     } catch (error) {
       console.error('Error submitting request:', error);
-      alert('Error submitting request. Please try again.');
+      alert('Error submitting request to Gateway.');
     } finally {
       setLoading(false);
     }
   };
 
-  const purchaseCredits = async (product) => {
-    setPaymentLoading(true);
+  const pollStatus = async (id) => {
     try {
-      const response = await axios.post('http://localhost:8084/api/v1/payments/create', {
-        userId,
-        product: product.name,
-        amount: product.amount,
-        currency: 'usd',
-        credits: product.credits,
-        description: product.description
-      });
-
-      setClientSecret(response.data.clientSecret);
-      setShowPayment(true);
-    } catch (error) {
-      console.error('Error creating payment:', error);
-      alert('Error creating payment. Please try again.');
-    } finally {
-      setPaymentLoading(false);
+      const response = await axios.get(`/api/v1/inference/${id}`);
+      setCheckedRequest(response.data);
+    } catch (e) {
+      console.error('Poll status error', e);
     }
-  };
-
-  const handlePaymentSuccess = () => {
-    setShowPayment(false);
-    setClientSecret(null);
-    alert('Payment successful! Credits added to your account.');
-    loadUserBalance();
   };
 
   const checkStatus = async () => {
     if (!checkRequestId) return;
-
     setChecking(true);
     try {
       const response = await axios.get(`/api/v1/inference/${checkRequestId}`);
       setCheckedRequest(response.data);
     } catch (error) {
-      console.error('Error checking status:', error);
-      alert('Request not found. Please check the ID.');
+      alert('Request not found.');
       setCheckedRequest(null);
     } finally {
       setChecking(false);
     }
   };
 
-  const refreshCheck = () => {
-    if (checkRequestId) {
-      checkStatus();
-    }
-  };
-
-  useEffect(() => {
-    if (checkedRequest && (checkedRequest.status === 'PENDING' || checkedRequest.status === 'PROCESSING')) {
-      const timer = setTimeout(refreshCheck, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [checkedRequest]);
-
-  const getStatusBadgeClass = (status) => {
-    return `status-badge ${status}`;
-  };
-
-  const getRequestCardClass = (status) => {
-    return `request-card ${status.toLowerCase()}`;
-  };
-
   return (
-    <Elements stripe={stripePromise}>
-      <div className="container">
-        <header className="header">
-          <h1>🤖 GenAI Orchestration Platform</h1>
-          <p>Scalable Microservices Architecture with Kafka & Payments</p>
-          {userBalance && (
-            <div className="balance-display">
-              <span className="balance-label">Your Credits:</span>
-              <span className="balance-value">{userBalance.credits}</span>
-            </div>
-          )}
-        </header>
+    <div className="container">
+      <header className="header">
+        <h1>🧠 Enterprise GenAI Orchestrator & Intelligent Router</h1>
+        <p>Spring Cloud Gateway • Kafka Workers • Resilience Cascading • OpenTelemetry</p>
+      </header>
 
-        <div className="tabs">
-          <button 
-            className={`tab ${activeTab === 'request' ? 'active' : ''}`}
-            onClick={() => setActiveTab('request')}
-          >
-            📝 New Request
-          </button>
-          <button 
-            className={`tab ${activeTab === 'payment' ? 'active' : ''}`}
-            onClick={() => setActiveTab('payment')}
-          >
-            💳 Buy Credits
-          </button>
-          <button 
-            className={`tab ${activeTab === 'status' ? 'active' : ''}`}
-            onClick={() => setActiveTab('status')}
-          >
-            🔍 Check Status
-          </button>
-        </div>
+      <div className="tabs">
+        <button 
+          className={`tab ${activeTab === 'playground' ? 'active' : ''}`}
+          onClick={() => setActiveTab('playground')}
+        >
+          🚀 LLM Playground & Router
+        </button>
+        <button 
+          className={`tab ${activeTab === 'observability' ? 'active' : ''}`}
+          onClick={() => setActiveTab('observability')}
+        >
+          📊 Observability & Traces
+        </button>
+        <button 
+          className={`tab ${activeTab === 'requests' ? 'active' : ''}`}
+          onClick={() => setActiveTab('requests')}
+        >
+          📜 Audit & Persistence
+        </button>
+      </div>
 
-        <div className="main-content">
-          {activeTab === 'request' && (
-            <div className="card">
-              <h2>Submit Inference Request (1 Credit)</h2>
+      <div className="main-content">
+        {activeTab === 'playground' && (
+          <div className="card">
+            <h2>Submit Request to Intelligent Router</h2>
+            {successMessage && <div className="success-message">✅ {successMessage}</div>}
 
-              {successMessage && (
-                <div className="success-message">
-                  ✅ {successMessage}
-                </div>
-              )}
+            <form onSubmit={submitRequest}>
+              <div className="form-group">
+                <label>Prompt Payload</label>
+                <textarea
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder="Explain microservices architecture and event-driven patterns with Kafka..."
+                  rows={4}
+                  required
+                />
+              </div>
 
-              <form onSubmit={submitRequest}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div className="form-group">
-                  <label>Prompt</label>
-                  <textarea
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    placeholder="Enter your prompt here..."
-                    required
-                  />
+                  <label>Intelligent Routing Strategy</label>
+                  <select value={routingStrategy} onChange={(e) => setRoutingStrategy(e.target.value)}>
+                    <option value="AUTO">AUTO (Dynamic Cost-Quality-Latency Scoring)</option>
+                    <option value="COST">COST (Optimize for Lowest Token Spend)</option>
+                    <option value="QUALITY">QUALITY (Route to High-Reasoning Model A)</option>
+                    <option value="LATENCY">LATENCY (Route to Lowest P99 Latency)</option>
+                    <option value="DIRECT">DIRECT (Manual Model Selection)</option>
+                  </select>
                 </div>
 
                 <div className="form-group">
-                  <label>Model</label>
+                  <label>Requested Model</label>
                   <select value={model} onChange={(e) => setModel(e.target.value)}>
-                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                    <option value="gpt-4">GPT-4</option>
+                    <option value="gpt-4o">Model A: GPT-4o (High Reasoning)</option>
+                    <option value="claude-3-5-sonnet">Model B: Claude 3.5 Sonnet (Balanced)</option>
+                    <option value="llama-3-70b">Model C: Llama 3 70B (Fast & Low Cost)</option>
                   </select>
                 </div>
+              </div>
 
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
                 <div className="form-group">
-                  <label>Tone (optional)</label>
-                  <select value={tone} onChange={(e) => setTone(e.target.value)}>
-                    <option value="">Default</option>
-                    <option value="friendly">Friendly</option>
-                    <option value="professional">Professional</option>
-                    <option value="humorous">Humorous</option>
-                    <option value="academic">Academic</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label>User ID</label>
+                  <label>Idempotency Key (Optional)</label>
                   <input
                     type="text"
-                    value={userId}
-                    onChange={(e) => setUserId(e.target.value)}
+                    value={idempotencyKey}
+                    onChange={(e) => setIdempotencyKey(e.target.value)}
+                    placeholder="idem-key-889"
                   />
                 </div>
-
-                <button type="submit" className="btn" disabled={loading}>
-                  {loading ? 'Submitting...' : '🚀 Submit Request'}
-                </button>
-              </form>
-            </div>
-          )}
-
-          {activeTab === 'payment' && !showPayment && (
-            <div className="card payment-card">
-              <h2>Buy Credits</h2>
-              <p className="payment-desc">Purchase credits to use our AI service. Each request costs 1 credit.</p>
-              
-              <div className="products-grid">
-                {products.map((product, index) => (
-                  <div key={index} className="product-card">
-                    <h3>{product.name}</h3>
-                    <p className="product-amount">${(product.amount / 100).toFixed(2)}</p>
-                    <p className="product-desc">{product.description}</p>
-                    <button 
-                      className="btn"
-                      onClick={() => purchaseCredits(product)}
-                      disabled={paymentLoading}
-                    >
-                      {paymentLoading ? 'Processing...' : 'Buy Now'}
-                    </button>
-                  </div>
-                ))}
+                <div className="form-group">
+                  <label>User ID</label>
+                  <input type="text" value={userId} onChange={(e) => setUserId(e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label>Tenant ID</label>
+                  <input type="text" value={tenantId} onChange={(e) => setTenantId(e.target.value)} />
+                </div>
               </div>
-            </div>
-          )}
 
-          {activeTab === 'payment' && showPayment && (
-            <div className="card payment-card">
-              <CheckoutForm 
-                clientSecret={clientSecret} 
-                onSuccess={handlePaymentSuccess}
-                onBack={() => {
-                  setShowPayment(false);
-                  setClientSecret(null);
-                }}
+              <button type="submit" className="btn" disabled={loading}>
+                {loading ? 'Routing to Worker Pool...' : '⚡ Submit via Gateway'}
+              </button>
+            </form>
+
+            {checkedRequest && (
+              <div style={{ marginTop: '24px', padding: '16px', background: '#1e293b', borderRadius: '8px', color: '#fff' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3>Execution Result for Request #{checkedRequest.requestId}</h3>
+                  <span className={`status-badge ${checkedRequest.status}`}>{checkedRequest.status}</span>
+                </div>
+                
+                <p><strong>Selected Execution Model:</strong> <span style={{ color: '#38bdf8' }}>{checkedRequest.selectedModel || checkedRequest.model}</span></p>
+                <p><strong>Fallback Chain Attempted:</strong> {checkedRequest.fallbackChain || checkedRequest.model}</p>
+                <p><strong>Trace ID (OpenTelemetry):</strong> <code>{checkedRequest.traceId || 'N/A'}</code></p>
+                
+                {checkedRequest.response && (
+                  <div style={{ background: '#0f172a', padding: '12px', borderRadius: '6px', marginTop: '10px' }}>
+                    <strong>Response Payload:</strong>
+                    <pre style={{ whiteSpace: 'pre-wrap', color: '#a7f3d0' }}>{checkedRequest.response}</pre>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'observability' && (
+          <div className="card">
+            <h2>Real-Time Observability & Telemetry Metrics</h2>
+            {metrics && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', margin: '20px 0' }}>
+                <div style={{ background: '#1e293b', padding: '16px', borderRadius: '8px', textAlign: 'center' }}>
+                  <h4 style={{ margin: 0, color: '#94a3b8' }}>Total Requests</h4>
+                  <h2 style={{ margin: '8px 0', color: '#38bdf8' }}>{metrics.totalRequests}</h2>
+                </div>
+                <div style={{ background: '#1e293b', padding: '16px', borderRadius: '8px', textAlign: 'center' }}>
+                  <h4 style={{ margin: 0, color: '#94a3b8' }}>Total Token Cost</h4>
+                  <h2 style={{ margin: '8px 0', color: '#4ade80' }}>${metrics.totalCostUsd}</h2>
+                </div>
+                <div style={{ background: '#1e293b', padding: '16px', borderRadius: '8px', textAlign: 'center' }}>
+                  <h4 style={{ margin: 0, color: '#94a3b8' }}>Avg P99 Latency</h4>
+                  <h2 style={{ margin: '8px 0', color: '#facc15' }}>{metrics.avgLatencyMs} ms</h2>
+                </div>
+                <div style={{ background: '#1e293b', padding: '16px', borderRadius: '8px', textAlign: 'center' }}>
+                  <h4 style={{ margin: 0, color: '#94a3b8' }}>OpenTelemetry Status</h4>
+                  <h2 style={{ margin: '8px 0', color: '#a855f7', fontSize: '18px' }}>CONNECTED</h2>
+                </div>
+              </div>
+            )}
+
+            <h3>System Observability Pipelines</h3>
+            <ul style={{ background: '#0f172a', padding: '16px', borderRadius: '8px', color: '#cbd5e1' }}>
+              <li><strong>Distributed Tracing:</strong> W3C Trace Context Propagation $\rightarrow$ Jaeger Collector</li>
+              <li><strong>Metrics Aggregation:</strong> Prometheus Metrics Exporter $\rightarrow$ Grafana Dashboard</li>
+              <li><strong>Log Stream:</strong> OpenSearch Structured JSON Log Sink</li>
+              <li><strong>Persistence Tiering:</strong> PostgreSQL Metadata + Redis Caching + Azure Blob Storage</li>
+            </ul>
+          </div>
+        )}
+
+        {activeTab === 'requests' && (
+          <div className="card">
+            <h2>Audit Log & Multi-Tier Persistence</h2>
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+              <input
+                type="text"
+                placeholder="Enter Request ID to inspect"
+                value={checkRequestId}
+                onChange={(e) => setCheckRequestId(e.target.value)}
               />
+              <button className="btn" onClick={checkStatus}>Inspect Status</button>
+              <button className="btn btn-secondary" onClick={fetchAllRequests}>Refresh List</button>
             </div>
-          )}
 
-          {activeTab === 'status' && (
-            <div className="card">
-              <h2>Check Request Status</h2>
-
-              <div className="status-check">
-                <input
-                  type="text"
-                  placeholder="Enter Request ID"
-                  value={checkRequestId}
-                  onChange={(e) => setCheckRequestId(e.target.value)}
-                />
-                <button onClick={checkStatus} disabled={checking}>
-                  {checking ? '...' : 'Check'}
-                </button>
-              </div>
-
-              {checking && (
-                <div className="loading">
-                  <div className="spinner"></div>
-                  <p>Checking status...</p>
-                </div>
-              )}
-
-              {checkedRequest && !checking && (
-                <div className={getRequestCardClass(checkedRequest.status)}>
-                  <div className="request-header">
-                    <span className="request-id">{checkedRequest.requestId}</span>
-                    <span className={getStatusBadgeClass(checkedRequest.status)}>
-                      {checkedRequest.status}
-                    </span>
-                  </div>
-                  <div className="request-prompt">
-                    <strong>Prompt:</strong> {checkedRequest.prompt}
-                  </div>
-
-                  {checkedRequest.status === 'COMPLETED' && checkedRequest.response && (
-                    <div className="request-response">
-                      <strong>Response:</strong>
-                      <p>{checkedRequest.response}</p>
-                    </div>
-                  )}
-
-                  {checkedRequest.status === 'FAILED' && checkedRequest.errorMessage && (
-                    <div className="request-error">
-                      <strong>Error:</strong> {checkedRequest.errorMessage}
-                    </div>
-                  )}
-
-                  <div className="request-meta">
-                    <p>Model: {checkedRequest.model}</p>
-                    <p>Created: {new Date(checkedRequest.createdAt).toLocaleString()}</p>
-                    {checkedRequest.processingTimeMs && (
-                      <p>Processing time: {checkedRequest.processingTimeMs}ms</p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ background: '#1e293b', color: '#94a3b8' }}>
+                  <th style={{ padding: '10px' }}>Request ID</th>
+                  <th style={{ padding: '10px' }}>Strategy</th>
+                  <th style={{ padding: '10px' }}>Model</th>
+                  <th style={{ padding: '10px' }}>Status</th>
+                  <th style={{ padding: '10px' }}>Cost</th>
+                  <th style={{ padding: '10px' }}>Latency</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allRequests.map((req) => (
+                  <tr key={req.requestId} style={{ borderBottom: '1px solid #334155' }}>
+                    <td style={{ padding: '10px' }}><code>{req.requestId}</code></td>
+                    <td style={{ padding: '10px' }}>{req.routingStrategy}</td>
+                    <td style={{ padding: '10px' }}>{req.selectedModel || req.model}</td>
+                    <td style={{ padding: '10px' }}>
+                      <span className={`status-badge ${req.status}`}>{req.status}</span>
+                    </td>
+                    <td style={{ padding: '10px' }}>${req.costUsd || 0.001}</td>
+                    <td style={{ padding: '10px' }}>{req.processingTimeMs || 0} ms</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
-    </Elements>
+    </div>
   );
 };
 

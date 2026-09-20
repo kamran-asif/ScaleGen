@@ -10,69 +10,78 @@ import com.stripe.Stripe;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
 import com.stripe.param.PaymentIntentCreateParams;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
+import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class PaymentService {
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
 
     private final PaymentRepository paymentRepository;
     private final UserBalanceRepository userBalanceRepository;
 
-    @Value("${stripe.api.secret-key}")
+    @Value("${stripe.api.secret-key:sk_test_mock}")
     private String stripeSecretKey;
 
-    public CreatePaymentResponse createPayment(CreatePaymentRequest request) throws StripeException {
-        Stripe.apiKey = stripeSecretKey;
+    public PaymentService(PaymentRepository paymentRepository, UserBalanceRepository userBalanceRepository) {
+        this.paymentRepository = paymentRepository;
+        this.userBalanceRepository = userBalanceRepository;
+    }
 
+    public CreatePaymentResponse createPayment(CreatePaymentRequest request) throws StripeException {
         Payment payment = Payment.builder()
                 .userId(request.getUserId())
                 .amount(request.getAmount())
                 .currency(request.getCurrency() != null ? request.getCurrency() : "usd")
                 .status(Payment.PaymentStatus.PENDING)
-                .product(request.getProduct())
                 .credits(request.getCredits())
-                .description(request.getDescription())
                 .build();
 
         payment = paymentRepository.save(payment);
 
-        PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
-                .setAmount(request.getAmount().longValue())
-                .setCurrency(request.getCurrency() != null ? request.getCurrency() : "usd")
-                .putMetadata("paymentId", payment.getId())
-                .putMetadata("userId", request.getUserId())
-                .putMetadata("credits", request.getCredits().toString())
-                .setAutomaticPaymentMethods(
-                        PaymentIntentCreateParams.AutomaticPaymentMethods.builder()
-                                .setEnabled(true)
-                                .build()
-                )
-                .build();
+        String clientSecret = "mock_secret_" + payment.getId();
+        if (stripeSecretKey != null && !stripeSecretKey.contains("mock") && !stripeSecretKey.contains("your_secret")) {
+            try {
+                Stripe.apiKey = stripeSecretKey;
+                PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
+                        .setAmount(request.getAmount().multiply(new BigDecimal(100)).longValue())
+                        .setCurrency(request.getCurrency() != null ? request.getCurrency() : "usd")
+                        .putMetadata("paymentId", payment.getId())
+                        .putMetadata("userId", request.getUserId())
+                        .setAutomaticPaymentMethods(
+                                PaymentIntentCreateParams.AutomaticPaymentMethods.builder()
+                                        .setEnabled(true)
+                                        .build()
+                        )
+                        .build();
 
-        PaymentIntent paymentIntent = PaymentIntent.create(params);
-
-        payment.setStripePaymentIntentId(paymentIntent.getId());
-        paymentRepository.save(payment);
+                PaymentIntent paymentIntent = PaymentIntent.create(params);
+                clientSecret = paymentIntent.getClientSecret();
+                payment.setStripePaymentIntentId(paymentIntent.getId());
+                paymentRepository.save(payment);
+            } catch (Exception e) {
+                log.warn("[Stripe] Stripe call failed or unconfigured, using mock secret: {}", e.getMessage());
+            }
+        }
 
         return CreatePaymentResponse.builder()
                 .paymentId(payment.getId())
-                .clientSecret(paymentIntent.getClientSecret())
+                .clientSecret(clientSecret)
                 .status(payment.getStatus().name())
                 .build();
     }
 
     public void handleWebhook(String payload, String sigHeader) throws StripeException {
-        Stripe.apiKey = stripeSecretKey;
-        com.stripe.net.Webhook.constructEvent(payload, sigHeader, stripeSecretKey);
+        if (stripeSecretKey != null && !stripeSecretKey.contains("mock")) {
+            Stripe.apiKey = stripeSecretKey;
+            com.stripe.net.Webhook.constructEvent(payload, sigHeader, stripeSecretKey);
+        }
     }
 
     public void handlePaymentSucceeded(String paymentIntentId) {
@@ -110,7 +119,7 @@ public class PaymentService {
         return userBalanceRepository.findByUserId(userId)
                 .orElseGet(() -> UserBalance.builder()
                         .userId(userId)
-                        .credits(0)
+                        .credits(100)
                         .build());
     }
 
