@@ -1,12 +1,13 @@
 # ScaleGen — Enterprise GenAI Gateway & Intelligent LLM Router
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg?style=flat-square)](https://github.com/kamran-asif/ScaleGen)
+[![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF.svg?style=flat-square&logo=githubactions)](https://github.com/kamran-asif/ScaleGen/actions)
 [![Java](https://img.shields.io/badge/Java-17-orange.svg?style=flat-square&logo=openjdk)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.0-green.svg?style=flat-square&logo=springboot)](https://spring.io/projects/spring-boot)
 [![Kafka](https://img.shields.io/badge/Apache%20Kafka-3.6.0-red.svg?style=flat-square&logo=apachekafka)](https://kafka.apache.org/)
-[![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Enabled-blue.svg?style=flat-square&logo=opentelemetry)](https://opentelemetry.io/)
+[![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Instrumented-blue.svg?style=flat-square&logo=opentelemetry)](https://opentelemetry.io/)
 [![React](https://img.shields.io/badge/React-18-cyan.svg?style=flat-square&logo=react)](https://react.dev/)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-AKS%20Ready-326ce5.svg?style=flat-square&logo=kubernetes)](https://kubernetes.io/)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-Azure%20AKS-326ce5.svg?style=flat-square&logo=kubernetes)](https://kubernetes.io/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
 
 **ScaleGen** is an enterprise-grade, distributed microservices platform engineered for high-throughput, fault-tolerant Generative AI request orchestration and intelligent LLM routing. 
@@ -17,94 +18,102 @@ Built on **Spring Boot 3**, **Apache Kafka**, **PostgreSQL**, **Redis**, and **R
 
 ## Table of Contents
 
-1. [Architectural Overview](#architectural-overview)
-2. [Visual Architecture Topology](#visual-architecture-topology)
-3. [End-to-End Sequence Flow](#end-to-end-sequence-flow)
-4. [Core Architectural Pillars](#core-architectural-pillars)
-   - [Distributed Gateway & Ingress](#1-distributed-gateway--ingress)
-   - [Idempotency & Orchestration Engine](#2-idempotency--orchestration-engine)
-   - [Event-Driven Streaming Fabric](#3-event-driven-streaming-fabric)
-   - [Intelligent LLM Router](#4-intelligent-llm-router)
-   - [Resilience & Fault-Tolerance Circuitry](#5-resilience--fault-tolerance-circuitry)
-   - [Sanitization & Multi-Tier Persistence](#6-sanitization--multi-tier-persistence)
-   - [Unified Observability & Telemetry](#7-unified-observability--telemetry)
-5. [Microservices Catalog](#microservices-catalog)
-6. [Intelligent Routing Engine Matrix](#intelligent-routing-engine-matrix)
-7. [API Specification & Examples](#api-specification--examples)
-8. [Local Development Quickstart](#local-development-quickstart)
-9. [Production Deployment (Azure AKS)](#production-deployment-azure-aks)
-10. [Repository Structure](#repository-structure)
+1. [Architectural Blueprints](#architectural-blueprints)
+   - [1. Core Microservices & Intelligent Router Topology](#1-core-microservices--intelligent-router-topology)
+   - [2. Resilience & Fault-Tolerance Decision Flow](#2-resilience--fault-tolerance-decision-flow)
+   - [3. Telemetry & Full-Stack Observability Pipeline](#3-telemetry--full-stack-observability-pipeline)
+   - [4. CI/CD & Cloud Infrastructure Architecture](#4-cicd--cloud-infrastructure-architecture)
+   - [5. Zero-Trust Security & Identity Architecture](#5-zero-trust-security--identity-architecture)
+2. [End-to-End Sequence & Data Flow](#end-to-end-sequence--data-flow)
+3. [Deep-Dive Systems Design](#deep-dive-systems-design)
+   - [Intelligent LLM Router (Cost • Quality • Latency)](#intelligent-llm-router-cost--quality--latency)
+   - [Distributed Gateway & Rate Limiting](#distributed-gateway--rate-limiting)
+   - [Idempotency & Lifecycle Engine](#idempotency--lifecycle-engine)
+   - [Resilience Circuitry & DLQ Cascading](#resilience-circuitry--dlq-cascading)
+   - [PII Sanitization & Multi-Tier Persistence](#pii-sanitization--multi-tier-persistence)
+4. [Microservices Catalog & Network Matrix](#microservices-catalog--network-matrix)
+5. [Intelligent Routing Engine Matrix](#intelligent-routing-engine-matrix)
+6. [API Specification & Examples](#api-specification--examples)
+7. [Local Development Quickstart](#local-development-quickstart)
+8. [Production Deployment (Azure AKS)](#production-deployment-azure-aks)
+9. [Repository Structure](#repository-structure)
+10. [License](#license)
 
 ---
 
-## Architectural Overview
+## Architectural Blueprints
+
+### 1. Core Microservices & Intelligent Router Topology
 
 ```
-                         React.js
-                            │
-                            ▼
-                 Spring Cloud Gateway
-                 Auth • Rate Limit
-                            │
-                            ▼
-                     Orchestrator
-              Validation • Idempotency
-                            │
-                            ▼
-                          Kafka
-                            │
-             ┌──────────────┼──────────────┐
-             ▼              ▼              ▼
-          Worker 1       Worker 2       Worker N
-             └──────────────┼──────────────┘
-                            ▼
-                   Intelligent Router
-                  Cost • Quality • Latency
-                       /     |      \
-                      ▼      ▼       ▼
-                   Model A Model B Model C
-                      \      |       /
-                       └──────┼─────┘
-                              ▼
-                         LLM Provider
-                              │
-                    ┌─────────┴─────────┐
-                    │ Retry             │
-                    │ Fallback          │
-                    │ Circuit Breaker   │
-                    │ DLQ               │
-                    └─────────┬─────────┘
-                              ▼
-                     Response Processor
-                              │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-         PostgreSQL         Redis        Azure Blob
-                             
-                 ─── Observability ───
-                              │
-                     OpenTelemetry
-                              │
-          ┌───────────────────┼──────────────────┐
-          ▼                   ▼                  ▼
-       Jaeger             Prometheus         OpenSearch
-       Traces              Metrics               Logs
-          └───────────────────┼──────────────────┘
-                              ▼
-                           Grafana
-
-                 ─── Cloud Infrastructure ───
-                              │
-                         Azure AKS
-                              │
-                    ┌─────────┴─────────┐
-                    ▼                   ▼
-                   ACR             Key Vault
+                              ┌──────────────────────┐
+                              │       React.js       │
+                              │   Client / Dashboard │
+                              └──────────┬───────────┘
+                                         │ HTTPS
+                                         ▼
+                         ┌─────────────────────────────┐
+                         │   Spring Cloud Gateway     │
+                         │ Auth • Rate Limit • Routing │
+                         └─────────────┬───────────────┘
+                                       │
+                                       ▼
+                         ┌─────────────────────────────┐
+                         │       Orchestrator          │
+                         │ Validation • Idempotency   │
+                         │ Request Lifecycle           │
+                         └─────────────┬───────────────┘
+                                       │
+                                       ▼
+                         ┌─────────────────────────────┐
+                         │          Kafka              │
+                         │ Async Event / Work Queue    │
+                         └─────────────┬───────────────┘
+                                       │
+                  ┌────────────────────┼────────────────────┐
+                  │                    │                    │
+                  ▼                    ▼                    ▼
+          ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+          │ Inference    │     │ Inference    │     │ Inference    │
+          │ Worker 1     │     │ Worker 2     │     │ Worker N     │
+          └──────┬───────┘     └──────┬───────┘     └──────┬───────┘
+                 └────────────────────┼─────────────────────┘
+                                      ▼
+                         ┌─────────────────────────────┐
+                         │    Intelligent Model       │
+                         │         Router              │
+                         │ Cost • Quality • Latency   │
+                         └─────────────┬───────────────┘
+                                       │
+                         ┌─────────────┼─────────────┐
+                         ▼             ▼             ▼
+                    ┌────────┐    ┌────────┐    ┌────────┐
+                    │ Model A│    │ Model B│    │ Model C│
+                    │  Fast  │    │Balanced│    │  Large │
+                    └────┬───┘    └────┬───┘    └────┬───┘
+                         └─────────────┼─────────────┘
+                                       ▼
+                              ┌────────────────┐
+                              │  OpenAI / LLM  │
+                              │    Provider    │
+                              └───────┬────────┘
+                                      │
+                                      ▼
+                         ┌─────────────────────────────┐
+                         │    Response Processor      │
+                         │ Validation • Formatting    │
+                         │ Token/Cost Tracking        │
+                         └─────────────┬───────────────┘
+                                       │
+                    ┌──────────────────┼──────────────────┐
+                    ▼                  ▼                  ▼
+             ┌────────────┐     ┌────────────┐     ┌────────────┐
+             │ PostgreSQL │     │   Redis    │     │Azure Blob  │
+             │ Metadata   │     │ Cache      │     │ Storage    │
+             └────────────┘     └────────────┘     └────────────┘
 ```
 
----
-
-## Visual Architecture Topology
+#### Topology Flowchart (Mermaid)
 
 ```mermaid
 flowchart TD
@@ -128,12 +137,13 @@ flowchart TD
 
     subgraph RoutingAndResilience ["Intelligent Routing & Resilience Engine"]
         W1 & W2 & WN --> Router["Intelligent Router\n(Dynamic Scoring: Cost • Quality • Latency)"]
-        Router --> RouteA["Model A: GPT-4o\n(High Reasoning)"]
-        Router --> RouteB["Model B: Claude 3.5 Sonnet\n(Balanced / Code)"]
-        Router --> RouteC["Model C: Llama 3 70B\n(Ultra-Low Latency & Cost)"]
+        Router --> RouteA["Model A: Fast / Low Cost\n(Llama 3 70B / Mistral)"]
+        Router --> RouteB["Model B: Balanced\n(Claude 3.5 Sonnet)"]
+        Router --> RouteC["Model C: Large / Reasoning\n(GPT-4o)"]
         
-        RouteA & RouteB & RouteC --> Resilience["Resilience Engine\n(Circuit Breaker • Jittered Backoff • Fallback Cascade)"]
-        Resilience -->|Unrecoverable Poison Pill| DLQ["Kafka Topic:\ninference-dlq"]
+        RouteA & RouteB & RouteC --> LLMProvider["LLM Provider Execution"]
+        LLMProvider --> Resilience["Resilience Engine\n(Circuit Breaker • Jittered Backoff • Fallback Cascade)"]
+        Resilience -->|Poison Pill / Exhaustion| DLQ["Kafka Topic:\ninference-dlq"]
     end
 
     subgraph ResponseProcessingTier ["Response Processing & Multi-Tier Persistence"]
@@ -144,24 +154,217 @@ flowchart TD
         RP -->|Publish Completion| KResp["Kafka Topic:\ninference-responses"]
         KResp --> GW
     end
+```
 
-    subgraph ObservabilityStack ["Full-Stack Telemetry (OpenTelemetry)"]
-        GW & Orch & W1 & RP -.->|W3C Trace Context / OTLP| OTel["OTel Collector"]
-        OTel --> Jaeger["Jaeger (Distributed Traces)"]
-        OTel --> Prom["Prometheus (RED Metrics)"]
-        OTel --> OS["OpenSearch (Structured JSON Logs)"]
-        Jaeger & Prom & OS --> Grafana["Grafana Unified Dashboard"]
+---
+
+### 2. Resilience & Fault-Tolerance Decision Flow
+
+```
+                         Inference
+                            │
+                       ┌────┴────┐
+                       │         │
+                    Success    Failure
+                       │         │
+                       ▼         ▼
+                    Response    Retry
+                                 │
+                          ┌──────┴──────┐
+                          │             │
+                       Success       Failure
+                          │             │
+                          │             ▼
+                          │       Fallback Model
+                          │             │
+                          │       ┌─────┴─────┐
+                          │       │           │
+                          │    Success      Failure
+                          │       │           │
+                          │       │           ▼
+                          │       │          DLQ
+                          └───────┴─────────────
+```
+
+#### Resilience Decision Matrix (Mermaid)
+
+```mermaid
+flowchart TD
+    Start(["Inference Request Dispatched"]) --> Primary["Invoke Primary Model (Model A)"]
+    Primary --> CheckPrimary{Call Status?}
+    CheckPrimary -- "Success (200 OK)" --> ReturnSuccess["Return Response to Client"]
+    CheckPrimary -- "Failure (429 / 5xx / Timeout)" --> RetryCount{"Max Retries Reached?\n(Exp Backoff + Full Jitter)"}
+    
+    RetryCount -- "No (Retry <= 3)" --> RetryAction["Sleep with Jittered Backoff\nRetry Primary Model"]
+    RetryAction --> Primary
+    
+    RetryCount -- "Yes (Retries Exhausted)" --> FallbackCheck{"Has Fallback Model?\n(Circuit Breaker Checked)"}
+    FallbackCheck -- "Yes" --> FallbackModel["Invoke Fallback Model (Model B / C)"]
+    FallbackModel --> CheckFallback{Fallback Status?}
+    CheckFallback -- "Success (200 OK)" --> AnnotateFallback["Annotate Metadata (fallback: true)\nReturn Response"]
+    CheckFallback -- "Failure" --> FallbackRetry{"More Fallbacks Available?"}
+    FallbackRetry -- "Yes" --> FallbackModel
+    FallbackRetry -- "No" --> DLQAction["Route to Dead Letter Queue (DLQ)\nEmit Failure Notification"]
+    DLQAction --> EndFail(["Request Terminated in DLQ"])
+    AnnotateFallback --> ReturnSuccess
+```
+
+---
+
+### 3. Telemetry & Full-Stack Observability Pipeline
+
+```
+Gateway
+   │
+Orchestrator
+   │
+ Kafka
+   │
+Workers
+   │
+LLM Provider
+   │
+Response Processor
+   │
+   ▼
+OpenTelemetry
+   │
+   ▼
+OpenTelemetry Collector
+   │
+   ├──────────────► Jaeger
+   │                 Traces
+   │
+   ├──────────────► Prometheus
+   │                 Metrics
+   │
+   └──────────────► OpenSearch
+                     Logs
+                        │
+                        ▼
+                     Grafana
+```
+
+#### Telemetry Flowchart (Mermaid)
+
+```mermaid
+flowchart LR
+    subgraph Microservices ["ScaleGen Distributed Services"]
+        GW["API Gateway"]
+        Orch["Orchestrator"]
+        Kafka["Kafka Broker"]
+        Workers["Inference Workers"]
+        LLM["LLM Providers"]
+        RP["Response Processor"]
     end
 
-    subgraph CloudInfra ["Azure Cloud Infrastructure"]
-        AKS["Azure AKS (Managed Kubernetes)"] --- ACR["Azure Container Registry"]
-        AKS --- KeyVault["Azure Key Vault (Secrets & CSI)"]
+    GW & Orch & Kafka & Workers & LLM & RP -->|W3C Trace Context / OTLP| OTel["OpenTelemetry SDK / Agent"]
+    OTel -->|OTLP gRPC :4317 / HTTP :4318| Collector["OpenTelemetry Collector"]
+
+    Collector -->|Distributed Traces| Jaeger["Jaeger\n(Trace Spans, Latency Waterfall)"]
+    Collector -->|Scrape Metrics| Prometheus["Prometheus\n(RED Metrics, Token Rates, Error %)"]
+    Collector -->|Structured JSON Logs| OpenSearch["OpenSearch / Elasticsearch\n(Audit Logs, TraceID Linked)"]
+
+    Jaeger & Prometheus & OpenSearch --> Grafana["Grafana Unified Dashboards\n(Executive KPI, Alerts, Latency SLAs)"]
+```
+
+---
+
+### 4. CI/CD & Cloud Infrastructure Architecture
+
+```
+                    GitHub Repository
+                           │
+                           ▼
+                    GitHub Actions
+                           │
+                Build • Test • Scan
+                           │
+                           ▼
+                    Docker Image
+                           │
+                           ▼
+                 Azure Container Registry
+                           │
+                           ▼
+                      Azure AKS
+                           │
+              ┌────────────┼────────────┐
+              ▼            ▼            ▼
+           Gateway      Workers       Services
+                            │
+                         HPA
+                            │
+                  Horizontal Scaling
+```
+
+#### DevOps & GitOps Lifecycle (Mermaid)
+
+```mermaid
+flowchart TD
+    GitRepo["GitHub Repository\n(kamran-asif/ScaleGen)"] -->|Git Push to main| GHA["GitHub Actions CI/CD Pipeline"]
+    
+    subgraph Pipeline ["Automated Build & Quality Gates"]
+        GHA --> Build["Maven Build & Unit Tests (JDK 17)"]
+        Build --> Scan["Security & Vulnerability Scan"]
+        Scan --> Dockerize["Docker Multi-Stage Container Build"]
+    end
+
+    Dockerize --> ACR["Azure Container Registry (ACR)\n(Versioned OCI Images)"]
+    ACR --> AKS["Azure Kubernetes Service (AKS)\n(Production Cluster)"]
+
+    subgraph ClusterWorkloads ["Kubernetes Deployments"]
+        AKS --> PodGW["API Gateway Pods"]
+        AKS --> PodOrch["Orchestrator Pods"]
+        AKS --> PodWork["Inference Worker Pods"]
+        AKS --> PodRP["Response Processor Pods"]
+        
+        PodWork --> HPA["Horizontal Pod Autoscaler (HPA)\n(Scaled on Kafka Lag & CPU Util)"]
     end
 ```
 
 ---
 
-## End-to-End Sequence Flow
+### 5. Zero-Trust Security & Identity Architecture
+
+```
+Client
+  │
+  ▼
+Gateway
+  │
+Authentication / Authorization
+  │
+  ▼
+Services
+  │
+  ├── Azure Key Vault → Secrets
+  ├── TLS → Service communication
+  └── Request validation
+```
+
+#### Security Domain Model (Mermaid)
+
+```mermaid
+flowchart TD
+    User(["External Client / React App"]) -->|mTLS / HTTPS (TLS 1.3)| Gateway["Spring Cloud Gateway Ingress"]
+    
+    subgraph EdgeSecurity ["Edge Perimeter"]
+        Gateway --> Auth["OAuth2.0 / OIDC JWT Token Validation"]
+        Gateway --> WAF["Rate Limiting & IP Throttling (Redis)"]
+    end
+
+    subgraph InternalMesh ["Internal Zero-Trust Mesh"]
+        Auth --> Services["Internal Microservices (mTLS Encrypted)"]
+        Services --> KeyVault["Azure Key Vault\n(Secret Rotation, Model API Keys, DB Credentials)"]
+        Services --> Validation["Strict Input Schema Validation\n(JSON Schema, Prompt Bound Checks)"]
+        Services --> RBAC["Role-Based Access Control (Tenant Segregation)"]
+    end
+```
+
+---
+
+## End-to-End Sequence & Data Flow
 
 ```mermaid
 sequenceDiagram
@@ -218,55 +421,45 @@ sequenceDiagram
 
 ---
 
-## Core Architectural Pillars
+## Deep-Dive Systems Design
 
-### 1. Distributed Gateway & Ingress
-* **Authentication & Authorization**: Validates incoming OAuth2/OIDC JWT tokens, extracting tenant identities, user scopes, and subscription entitlement tiers.
-* **Token Bucket Rate Limiting**: Distributed, low-latency rate limiting enforced via Redis hashes. Prevents noisy-neighbor saturation by throttling on both:
-  * **RPM (Requests Per Minute)**
-  * **TPM (Tokens Per Minute)**
-
-### 2. Idempotency & Orchestration Engine
-* **Cryptographic Request Fingerprinting**: Generates deterministic SHA-256 digests over `userId + prompt + modelParameters + idempotencyKey`.
-* **Zero-Compute Short Circuiting**: If an identical request was fulfilled within the deduplication window, ScaleGen bypasses the LLM compute grid entirely, returning the cached payload in $<5\text{ms}$.
-* **Guardrail & Prompt Enrichment**: Sanitizes input schemas, bounds generation limits (`max_tokens`, `temperature`, `top_p`), and injects organization system directives.
-
-### 3. Event-Driven Streaming Fabric
-* **Decoupled Architecture**: Eliminates HTTP thread starvation during extended generative completions by buffering requests in **Apache Kafka**.
-* **Topic Partitioning Strategy**: Requests are keyed by `tenantId` or `userId` to ensure partition-level ordering and distributed consumer concurrency across worker groups.
-* **Dead Letter Queue (DLQ)**: Poison pills or permanent upstream rejections are systematically pushed to `inference-dlq` alongside fault telemetry for diagnostic replay.
-
-### 4. Intelligent LLM Router
+### Intelligent LLM Router (Cost • Quality • Latency)
 The router dynamically optimizes model selection using a weighted multi-criteria decision matrix:
 
 $$\text{Score} = w_c \cdot C_{\text{est}} + w_l \cdot L_{\text{p99}} + w_q \cdot (1 - Q_{\text{model}}) + w_a \cdot (1 - A_{\text{health}})$$
 
-* **`AUTO` Mode**: Evaluates prompt linguistic complexity and semantic length. Simple queries (e.g. classification, translation) route to fast, cheap models; complex multi-step reasoning queries dynamically route to Frontier models.
+* **`AUTO` Mode**: Evaluates prompt linguistic complexity and semantic token length. Simple queries (e.g., sentiment analysis, classification) route to high-speed, cost-efficient models; complex multi-step reasoning queries dynamically route to Frontier models.
 * **`COST` Mode**: Aggressively minimizes token expenditure by selecting the lowest cost-per-token provider matching minimum quality thresholds.
-* **`QUALITY` Mode**: Directs traffic to Tier-1 models (e.g., GPT-4o, Claude 3.5 Sonnet) prioritized for accuracy and instruction-following.
+* **`QUALITY` Mode**: Directs traffic to Tier-1 models (e.g., GPT-4o, Claude 3.5 Sonnet) prioritized for factual reasoning and instruction-following.
 * **`LATENCY` Mode**: Prioritizes lowest Time-To-First-Token (TTFT) and P99 latency models (e.g., Llama 3 70B, Mistral Small).
 
-### 5. Resilience & Fault-Tolerance Circuitry
+### Distributed Gateway & Rate Limiting
+* **Authentication & Authorization**: Validates incoming OAuth2/OIDC JWT tokens, extracting tenant identities, user scopes, and subscription entitlement tiers.
+* **Token Bucket Algorithm**: Distributed, low-latency rate limiting enforced via Redis hashes. Prevents noisy-neighbor saturation by throttling on both:
+  * **RPM (Requests Per Minute)**
+  * **TPM (Tokens Per Minute)**
+
+### Idempotency & Lifecycle Engine
+* **Cryptographic Request Fingerprinting**: Generates deterministic SHA-256 digests over `userId + prompt + modelParameters + idempotencyKey`.
+* **Zero-Compute Short Circuiting**: If an identical request was fulfilled within the deduplication window, ScaleGen bypasses the LLM compute grid entirely, returning the cached payload in $<5\text{ms}$.
+* **Guardrail & Prompt Enrichment**: Sanitizes input schemas, bounds generation limits (`max_tokens`, `temperature`, `top_p`), and injects organization system directives.
+
+### Resilience Circuitry & DLQ Cascading
 * **Circuit Breaker State Machine**: Monitors rolling error rates per model endpoint. When failures exceed threshold ($>3$ consecutive or $>30\%$ window), the breaker transitions to `OPEN`, immediately shielding the failing provider and diverting traffic to fallbacks.
-* **Exponential Backoff with Full Jitter**: Retries transient $429$ (rate-limited) and $5xx$ errors with randomized backoff delays to eliminate thundering herds:
+* **Exponential Backoff with Full Jitter**: Retries transient $429$ (rate-limited) and $5xx$ errors with randomized backoff delays:
   $$t_{\text{sleep}} = \text{random}(0, \min(t_{\text{max}}, t_{\text{base}} \cdot 2^{\text{attempt}}))$$
 * **Active Fallback Cascading**: If Model A fails or times out, the engine seamlessly invokes Model B $\rightarrow$ Model C in real-time while annotating telemetry logs with the full fallback traversal.
 
-### 6. Sanitization & Multi-Tier Persistence
+### PII Sanitization & Multi-Tier Persistence
 * **PII Redaction Engine**: High-performance regex pipeline scrubbing sensitive data (Emails, Social Security Numbers, Credit Card patterns, IPv4 addresses) from completion streams before client delivery.
 * **Tiered Storage Architecture**:
   * **PostgreSQL**: ACID-compliant transactional store for audit trails, token accounting, latency breakdowns, and request tracking.
   * **Redis**: Microsecond in-memory key-value cache for hot idempotency keys and frequent prompt/response pairs.
   * **Azure Blob Storage**: Scalable cloud object storage for heavy raw payloads, multi-modal artifacts, and compliance cold logs.
 
-### 7. Unified Observability & Telemetry
-* **W3C Trace Context Propagation**: Propagates `traceparent` headers across HTTP requests, Kafka message headers, and provider client calls for unbroken distributed traces in **Jaeger**.
-* **Prometheus Instrumentation**: Exports vital metrics including token burn rates, model-specific P50/P90/P99 latencies, provider error rates, and circuit breaker trip events.
-* **OpenSearch & Grafana**: Centralized log aggregation with unified executive dashboards monitoring operational uptime, regional latency, and cost attribution.
-
 ---
 
-## Microservices Catalog
+## Microservices Catalog & Network Matrix
 
 | Service | Port | Technology | Primary Functionality |
 | :--- | :--- | :--- | :--- |
@@ -283,9 +476,9 @@ $$\text{Score} = w_c \cdot C_{\text{est}} + w_l \cdot L_{\text{p99}} + w_q \cdot
 
 | Model Tier | Model Target | Provider | Cost / 1k Input | Cost / 1k Output | Avg P99 Latency | Quality Rating | Target Use Case |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Model A** | `gpt-4o` | OpenAI | $\$0.0050$ | $\$0.0150$ | $450\text{ ms}$ | $98\%$ | Complex reasoning, mathematics, architecture |
+| **Model A** | `llama-3-70b` | Meta / Ollama | $\$0.0008$ | $\$0.0020$ | $180\text{ ms}$ | $88\%$ | High-volume summarization, fast Q&A |
 | **Model B** | `claude-3-5-sonnet` | Anthropic | $\$0.0030$ | $\$0.0120$ | $320\text{ ms}$ | $95\%$ | Code generation, nuanced text synthesis |
-| **Model C** | `llama-3-70b` | Meta / Ollama | $\$0.0008$ | $\$0.0020$ | $180\text{ ms}$ | $88\%$ | High-volume summarization, fast Q&A |
+| **Model C** | `gpt-4o` | OpenAI | $\$0.0050$ | $\$0.0150$ | $450\text{ ms}$ | $98\%$ | Complex reasoning, mathematics, architecture |
 
 ---
 
@@ -463,6 +656,9 @@ kubectl get pods -w
 
 ```
 ScaleGen/
+├── .github/
+│   └── workflows/
+│       └── ci.yml            # Automated GitHub Actions CI/CD Pipeline
 ├── api-gateway/              # Spring Cloud Ingress Gateway, JWT Auth & Rate Limiter
 ├── orchestrator/             # Schema Validation, Guardrails & SHA-256 Idempotency Engine
 ├── inference-worker/         # Dynamic Router, Circuit Breaker & Multi-LLM Provider Grid

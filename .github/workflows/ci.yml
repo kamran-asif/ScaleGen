@@ -1,0 +1,60 @@
+name: ScaleGen CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    name: Build, Test & Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
+
+    - name: Compile and Test Microservices
+      run: mvn clean verify --batch-mode
+
+    - name: Set up Node.js for Frontend
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18
+        cache: 'npm'
+        cache-dependency-path: frontend/package.json
+
+    - name: Install and Build Frontend
+      run: |
+        cd frontend
+        npm ci
+        npm run build
+
+  docker-build:
+    name: Build & Push Container Images to ACR
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker Images (Simulation / Dry Run)
+      run: |
+        echo "Building ScaleGen microservice container images..."
+        docker build -t scalegen/api-gateway:latest ./api-gateway
+        docker build -t scalegen/orchestrator:latest ./orchestrator
+        docker build -t scalegen/inference-worker:latest ./inference-worker
+        docker build -t scalegen/response-processor:latest ./response-processor
